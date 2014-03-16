@@ -2833,6 +2833,13 @@ function calendar_add_subscription($sub) {
     } else {
         print_error('errorbadsubscription', 'importcalendar');
     }
+    
+    //Trigger calendar subscription delete event
+    $event = \core\event\calendar_subscription_added::create(array(
+        'context' => context::instance_by_id($subscription->contextid),
+        'objectid' => $subscription->id,
+    ));
+    $event->trigger();
 }
 
 /**
@@ -2972,6 +2979,13 @@ function calendar_delete_subscription($subscription) {
     $DB->delete_records('event', array('subscriptionid' => $subscription));
     $DB->delete_records('event_subscriptions', array('id' => $subscription));
     cache_helper::invalidate_by_definition('core', 'calendar_subscriptions', array(), array($subscription));
+    
+    //Trigger calendar subscription delete event
+    $event = \core\event\calendar_subscription_deleted::create(array(
+        'context' => context::instance_by_id($subscription->contextid),
+        'objectid' => $subscription->id,
+    ));
+    $event->trigger();
 }
 /**
  * From a URL, fetch the calendar and return an iCalendar object.
@@ -3088,6 +3102,14 @@ function calendar_update_subscription($subscription) {
     }
 
     $DB->update_record('event_subscriptions', $subscription);
+    
+    //Trigger calendar subscription update event
+    $event = \core\event\calendar_subscription_updated::create(array(
+        'context' => context::instance_by_id($subscription->contextid),
+        'objectid' => $subscription->id,
+    ));
+    $event->trigger();
+    
     // Update cache.
     $cache = cache::make('core', 'calendar_subscriptions');
     $cache->set($subscription->id, $subscription);
