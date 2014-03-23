@@ -1,18 +1,20 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Moodle is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+/**
+ * This file is part of Moodle - http://moodle.org/
+ *
+ * Moodle is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Moodle is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 /**
  * Calendar extension
@@ -2807,11 +2809,17 @@ function calendar_add_subscription($sub) {
 
     if ($sub->eventtype === 'site') {
         $sub->courseid = $SITE->id;
-    } else if ($sub->eventtype === 'group' || $sub->eventtype === 'course') {
+        $context = context_system::instance();
+    } else if ($sub->eventtype === 'group') {
         $sub->courseid = $sub->course;
+        $context = context_course::instance($sub->courseid);
+    } else if ($sub->eventtype === 'course') {
+        $sub->courseid = $sub->course;
+        $context = context_course::instance($sub->courseid);
     } else {
         // User events.
         $sub->courseid = 0;
+        $context = context_user::instance($USER->id);
     }
     $sub->userid = $USER->id;
 
@@ -2824,22 +2832,24 @@ function calendar_add_subscription($sub) {
         if (empty($sub->id)) {
             $id = $DB->insert_record('event_subscriptions', $sub);
             // we cannot cache the data here because $sub is not complete.
+            
+            //Trigger calendar subscription add event
+            $event = \core\event\Calendar_Subscription_Added::create(array(
+                'context' => $context,
+                'objectid' => $sub->id,
+            ));
+            $event->add_record_snapshot('event_subscriptions', $sub);
+			$event->trigger();
+            
             return $id;
         } else {
             // Why are we doing an update here?
-            calendar_update_subscription($sub);
+            calendar_update_subscription($sub);          
             return $sub->id;
         }
     } else {
         print_error('errorbadsubscription', 'importcalendar');
     }
-    
-    //Trigger calendar subscription delete event
-    $event = \core\event\calendar_subscription_added::create(array(
-        'context' => context::instance_by_id($subscription->contextid),
-        'objectid' => $subscription->id,
-    ));
-    $event->trigger();
 }
 
 /**
@@ -2972,6 +2982,17 @@ function calendar_process_subscription_row($subscriptionid, $pollinterval, $acti
 function calendar_delete_subscription($subscription) {
     global $DB;
 
+    if ($subscription->eventtype === 'site') {
+        $context = context_system::instance();
+    } else if ($subscription->eventtype === 'group') {
+        $context = context_course::instance($subscription->courseid);
+    } else if ($subscription->eventtype === 'course') {
+        $context = context_course::instance($subscription->courseid);
+    } else {
+        // User events.
+        $context = context_user::instance($subscription->id);
+    }
+
     if (is_object($subscription)) {
         $subscription = $subscription->id;
     }
@@ -2981,10 +3002,11 @@ function calendar_delete_subscription($subscription) {
     cache_helper::invalidate_by_definition('core', 'calendar_subscriptions', array(), array($subscription));
     
     //Trigger calendar subscription delete event
-    $event = \core\event\calendar_subscription_deleted::create(array(
-        'context' => context::instance_by_id($subscription->contextid),
+    $event = \core\event\Calendar_Subscription_Deleted::create(array(
+        'context' => $context,
         'objectid' => $subscription->id,
     ));
+    $event->add_record_snapshot('event', $subscription);
     $event->trigger();
 }
 /**
@@ -3102,13 +3124,6 @@ function calendar_update_subscription($subscription) {
     }
 
     $DB->update_record('event_subscriptions', $subscription);
-    
-    //Trigger calendar subscription update event
-    $event = \core\event\calendar_subscription_updated::create(array(
-        'context' => context::instance_by_id($subscription->contextid),
-        'objectid' => $subscription->id,
-    ));
-    $event->trigger();
     
     // Update cache.
     $cache = cache::make('core', 'calendar_subscriptions');
