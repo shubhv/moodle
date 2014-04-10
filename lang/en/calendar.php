@@ -22,7 +22,9 @@
  * @copyright 1999 onwards Martin Dougiamas  {@link http://moodle.com}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
+$string['eventsubscriptionadded'] = 'Calendar subscription added';
+$string['eventsubscriptionupdated'] = 'Calendar subscription updated';
+$string['eventsubscriptiondeleted'] = 'Calendar subscription deleted';
 $string['advancedoptions'] = 'Advanced options';
 $string['allday'] = 'All day';
 $string['addevent'] = 'Add events';
